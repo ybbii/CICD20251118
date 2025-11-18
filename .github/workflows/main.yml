@@ -1,0 +1,45 @@
+name: Build and Run Spring Boot in WSL
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: self-hosted   # WSL Runner 사용
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set execute permission for Gradle
+        run: chmod +x ./gradlew
+
+      - name: Ensure spring-app directory exists
+        run: mkdir -p ~/spring-app && chmod -R 755 ~/spring-app
+
+      - name: Build Spring Boot jar
+        run: ./gradlew clean bootJar -x test --stacktrace
+
+      - name: Verify JAR file exists
+        run: |
+          echo "Checking build/libs directory..."
+          ls -l build/libs
+          if [ ! -f build/libs/*.jar ]; then
+            echo "Error: JAR file not found!"
+            exit 1
+          fi
+
+      - name: Run Spring Boot app
+        run: |
+          cp build/libs/*.jar ~/spring-app/app.jar
+          chmod +x ~/spring-app/app.jar
+          
+          # 기존 java 프로세스 모두 종료 (root 권한)
+          sudo pkill -f 'java -jar' || true
+          
+          # 백그라운드로 안전하게 root 권한으로 실행
+          sudo nohup java -jar ~/spring-app/app.jar > ~/spring-app/app.log 2>&1 < /dev/null &
+          
+      - name: Show running java processes
+        run: ps aux | grep java
